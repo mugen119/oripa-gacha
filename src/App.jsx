@@ -4,13 +4,22 @@ import { motion, AnimatePresence } from "framer-motion";
 const symbols = ["🍒", "🍋", "🍊", "🍇", "⭐️", "7", "💎"];
 const reelsCount = 3;
 const rowsCount = 3;
+
+// 横揃い、縦揃い、斜め揃いのペイライン（col, row）
 const payLines = [
-  [[0, 0], [1, 0], [2, 0]],
-  [[0, 1], [1, 1], [2, 1]],
-  [[0, 2], [1, 2], [2, 2]],
+  // 横揃い
+  [[0, 0], [1, 0], [2, 0]], // 上段横
+  [[0, 1], [1, 1], [2, 1]], // 中段横
+  [[0, 2], [1, 2], [2, 2]], // 下段横
+  // 縦揃いを追加するなら
+  [[0, 0], [0, 1], [0, 2]], // 左列縦
+  [[1, 0], [1, 1], [1, 2]], // 中央列縦
+  [[2, 0], [2, 1], [2, 2]], // 右列縦
+  // 斜め揃い
   [[0, 0], [1, 1], [2, 2]],
   [[0, 2], [1, 1], [2, 0]],
 ];
+
 
 const payoutMultiplier = {
   "🍒": 1.2,
@@ -20,19 +29,23 @@ const payoutMultiplier = {
   "⭐️": 30,
   "7": 100,
   "💎": 10,
-  "SUPER7": 1000, 
+  "SUPER7": 1000,
 };
 
 function randomSymbol() {
   return symbols[Math.floor(Math.random() * symbols.length)];
 }
 
+// 全ペイラインをチェックして当たりを判定する関数
 function checkWin(grid) {
   for (const line of payLines) {
     const [a, b, c] = line;
     const symA = grid[a[0]][a[1]];
     if (symA === null) continue;
-    if (symA === grid[b[0]][b[1]] && symA === grid[c[0]][c[1]]) {
+    if (
+      symA === grid[b[0]][b[1]] &&
+      symA === grid[c[0]][c[1]]
+    ) {
       return { win: true, symbol: symA, line };
     }
   }
@@ -87,7 +100,9 @@ function LcdMessage({ children, show, isLose }) {
 
 export default function VvvSlotMachine() {
   const [grid, setGrid] = useState(
-    Array(reelsCount).fill(null).map(() => Array(rowsCount).fill(null))
+    Array(reelsCount)
+      .fill(null)
+      .map(() => Array(rowsCount).fill(null))
   );
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState(null);
@@ -102,7 +117,7 @@ export default function VvvSlotMachine() {
   const [coins, setCoins] = useState(1000);
   const [displayCoins, setDisplayCoins] = useState(coins);
 
-  const betOptions = [10, 20, 50, 100, 200, 500, 1000];
+  const betOptions = [10, 50, 100, 200, 500, 1000, 10000, 100000];
   const [betCoins, setBetCoins] = useState(50);
 
   const [comboCount, setComboCount] = useState(0);
@@ -387,16 +402,24 @@ export default function VvvSlotMachine() {
           className="absolute top-0 left-0 w-full h-full pointer-events-none"
           style={{ zIndex: 10 }}
         >
+
+
+
           <line
-            x1={`${(highlightLine[0][0] + 0.5) * (100 / reelsCount)}%`}
-            y1={`${(highlightLine[0][1] + 0.5) * (100 / rowsCount)}%`}
-            x2={`${(highlightLine[2][0] + 0.5) * (100 / reelsCount)}%`}
-            y2={`${(highlightLine[2][1] + 0.5) * (100 / rowsCount)}%`}
+            x1={`${(highlightLine[0][1] + 0.5) * (100 / rowsCount)}%`}
+            y1={`${(highlightLine[0][0] + 0.5) * (100 / reelsCount)}%`}
+            x2={`${(highlightLine[2][1] + 0.5) * (100 / rowsCount)}%`}
+            y2={`${(highlightLine[2][0] + 0.5) * (100 / reelsCount)}%`}
             stroke="yellow"
             strokeWidth="5"
             strokeLinecap="round"
             style={{ filter: "drop-shadow(0 0 8px yellow)" }}
           >
+
+
+
+
+
             <animate
               attributeName="stroke-dashoffset"
               from="0"
@@ -476,6 +499,7 @@ export default function VvvSlotMachine() {
       </LcdMessage>
 
       {/* 音声 */}
+
       <audio
         ref={spinAudioRef}
         src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"
@@ -501,7 +525,7 @@ export default function VvvSlotMachine() {
         src="https://actions.google.com/sounds/v1/cartoon/boing.ogg"
         preload="auto"
       />
-      
+
     </div>
   );
 }
