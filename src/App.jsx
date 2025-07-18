@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const symbols = ["🍒", "🍋", "🍊", "🍇", "⭐️", "7️⃣", "💎"];
+const symbols = ["🍒", "🍋", "🍊", "🍇", "⭐️", "7", "💎"];
 const reelsCount = 3;
 const rowsCount = 3;
 const payLines = [
@@ -11,6 +11,16 @@ const payLines = [
   [[0, 0], [1, 1], [2, 2]],
   [[0, 2], [1, 1], [2, 0]],
 ];
+
+const payoutMultiplier = {
+  "🍒": 1.2,
+  "🍋": 1.5,
+  "🍊": 2,
+  "🍇": 5,
+  "⭐️": 10,
+  "7": 100,
+  "💎": 30,
+};
 
 function randomSymbol() {
   return symbols[Math.floor(Math.random() * symbols.length)];
@@ -75,12 +85,23 @@ export default function VvvSlotMachine() {
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState(null);
   const [highlightLine, setHighlightLine] = useState(null);
-  const isJackpot = result?.win && result.symbol === "7️⃣";
+  const isJackpot = result?.win && result.symbol === "7";
 
   // コイン管理
   const [coins, setCoins] = useState(1000);
   const [displayCoins, setDisplayCoins] = useState(coins);
 
+  // ベットコイン数配列と状態
+  const betOptions = [10, 20, 50, 100, 200, 500, 1000];
+  const [betCoins, setBetCoins] = useState(50);
+
+  // コンボ・連続勝利
+  const [comboCount, setComboCount] = useState(0);
+
+  // Freeスピン残数
+  const [freeSpins, setFreeSpins] = useState(0);
+
+  // 音声リファレンス
   const winAudioRef = useRef(null);
   const jackpotAudioRef = useRef(null);
   const spinAudioRef = useRef(null);
@@ -97,8 +118,17 @@ export default function VvvSlotMachine() {
     let targetCoins = coins;
 
     if (result.win) {
-      const reward = isJackpot ? 2000 : 500;
-      targetCoins = coins + reward;
+      // 当たったシンボルの倍率を取得（なければ1）
+      const multiplier = payoutMultiplier[result.symbol] ?? 1;
+
+      // ベットコイン × 倍率を基本報酬に
+      let baseReward = betCoins * multiplier;
+
+      // コンボボーナス（最大5倍）
+      const comboMultiplier = Math.min(comboCount, 5);
+      baseReward *= comboMultiplier;
+
+      targetCoins = coins + baseReward;
       setCoins(targetCoins);
     } else {
       targetCoins = coins;
@@ -120,12 +150,22 @@ export default function VvvSlotMachine() {
     return () => cancelAnimationFrame(animationFrameId);
   }, [result]);
 
-  const startSpin = () => {
+  // Freeスピン発動時は自動的にスピン
+  useEffect(() => {
+    if (freeSpins > 0 && !spinning) {
+      setFreeSpins(freeSpins - 1);
+      startSpin(true);
+    }
+  }, [freeSpins, spinning]);
+
+  // スピン開始
+  const startSpin = (isFreeSpin = false) => {
     if (spinning) return;
-    if (coins <= 0) {
+    if (coins < betCoins && !isFreeSpin) {
       alert("コインが足りません！");
       return;
     }
+
     setSpinning(true);
     setResult(null);
     setHighlightLine(null);
@@ -134,6 +174,7 @@ export default function VvvSlotMachine() {
 
     let frames = 0;
     const maxFrames = 30;
+
     const intervalId = setInterval(() => {
       frames++;
       setGrid(
@@ -145,6 +186,7 @@ export default function VvvSlotMachine() {
               .map(() => randomSymbol())
           )
       );
+
       if (frames >= maxFrames) {
         clearInterval(intervalId);
         const finalGrid = Array(reelsCount)
@@ -155,21 +197,35 @@ export default function VvvSlotMachine() {
               .map(() => randomSymbol())
           );
         setGrid(finalGrid);
+
         const res = checkWin(finalGrid);
         setResult(res);
+
         if (res.win) {
           setHighlightLine(res.line);
           if (lineAudioRef.current) lineAudioRef.current.play();
+
+          setComboCount((prev) => prev + 1);
+
+          // チェリー揃いならFreeSpinを1追加
+          if (res.symbol === "🍒") {
+            setFreeSpins((prev) => prev + 1);
+          }
+        } else {
+          setComboCount(0);
         }
+
         setSpinning(false);
       }
     }, 50);
 
-    // コイン消費50
-    setCoins((c) => Math.max(0, c - 50));
-    setDisplayCoins((c) => Math.max(0, c - 50));
+    if (!isFreeSpin) {
+      setCoins((c) => Math.max(0, c - betCoins));
+      setDisplayCoins((c) => Math.max(0, c - betCoins));
+    }
   };
 
+  // 音声再生
   useEffect(() => {
     if (result?.win) {
       if (isJackpot) {
@@ -183,7 +239,7 @@ export default function VvvSlotMachine() {
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-gray-900 via-black to-gray-900 flex flex-col items-center justify-center p-8 text-white font-mono select-none overflow-hidden">
       <h1 className="text-5xl font-extrabold mb-8 tracking-widest text-red-600 drop-shadow-[0_0_10px_red]">
-        VVVスロットチャレンジ
+        スロット
       </h1>
 
       {/* コイン残高表示 */}
@@ -197,6 +253,24 @@ export default function VvvSlotMachine() {
         Coins: {displayCoins.toLocaleString()}
       </motion.div>
 
+      {/* ベットコイン数切替ボタン */}
+      <motion.button
+        onClick={() => {
+          setBetCoins((prev) => {
+            const currentIndex = betOptions.indexOf(prev);
+            const nextIndex = (currentIndex + 1) % betOptions.length;
+            return betOptions[nextIndex];
+          });
+        }}
+        whileHover={{ scale: 1.05, boxShadow: "0 0 15px 4px #f59e0b" }}
+        whileTap={{ scale: 0.9 }}
+        className="mb-6 px-5 py-2 rounded-lg bg-gradient-to-r from-yellow-400 via-red-600 to-pink-700 text-black text-lg font-extrabold shadow-[0_0_20px_red] cursor-pointer select-none"
+        aria-label="ベットコイン数切替ボタン"
+      >
+        ベットコイン数: {betCoins.toLocaleString()} 🪙
+      </motion.button>
+
+      {/* リール表示 */}
       <div className="relative grid grid-cols-3 gap-6 bg-black/90 p-6 rounded-xl shadow-[0_0_30px_red] border-4 border-red-700">
         {Array(reelsCount)
           .fill(null)
@@ -275,24 +349,34 @@ export default function VvvSlotMachine() {
 
       {/* スピンボタン */}
       <motion.button
-        onClick={startSpin}
-        disabled={spinning || coins <= 0}
+        onClick={() => startSpin(false)}
+        disabled={spinning || coins < betCoins}
         whileHover={{ scale: 1.05, boxShadow: "0 0 12px 4px #f59e0b" }}
         whileTap={{ scale: 0.9 }}
         className={`mt-12 px-12 py-4 font-extrabold text-2xl rounded-xl text-black ${
-          spinning || coins <= 0
+          spinning || coins < betCoins
             ? "bg-gray-600 cursor-not-allowed"
             : "bg-gradient-to-r from-yellow-400 via-red-600 to-pink-700 shadow-[0_0_20px_red] hover:brightness-110 transition duration-300"
         }`}
       >
-        {spinning ? "回転中..." : coins <= 0 ? "コインが足りません" : "START"}
+        {spinning
+          ? "回転中..."
+          : coins < betCoins
+          ? "コインが足りません"
+          : "START"}
       </motion.button>
+
+      {/* コンボ・フリースピン表示 */}
+      <div className="mt-6 space-y-2 text-center">
+        {comboCount > 0 && <div>🔥 コンボ: {comboCount}</div>}
+        {freeSpins > 0 && <div>🎰 Freeスピン残り: {freeSpins}</div>}
+      </div>
 
       {/* 液晶風メッセージ */}
       <LcdMessage show={!!result} isLose={result && !result.win}>
         {result?.win
           ? isJackpot
-            ? "JACKPOT! 7️⃣が揃いました！"
+            ? "JACKPOT! 7が揃いました！"
             : `WIN! ${result.symbol} が揃いました！`
           : "残念、ハズレです！"}
       </LcdMessage>
